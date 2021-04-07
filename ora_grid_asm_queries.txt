@@ -1,0 +1,346 @@
+
+
+ASM fornece várias vantagens e características:
+
+Gerencia grupos de discos automaticamente.
+Dada a redundância dentro de cada grupo de discos.
+Ele fornece operações de balanceamento quase ideais I / O sem intervenção manual.
+Ele permite o gerenciamento de objetos de banco de dados sem especificar pontos de montagem ou nomes de arquivos.
+Ele suporta arquivos grandes.
+Fornece espelhamento e striping no nível de arquivo.
+A administração e configuração ASM pode ser feito com comandosSQL , facilitando a compreensão dessas tarefas.
+
+Parâmetros de inicialização que são de interesse especial para instância ASM são:
+
+INSTANCE_TYPE: aceita dois valores possíveis, ASM ou RDBMS, dependendo do tipo de exemplo. Se não for especificado, o padrão é RDBMS.
+DB_UNIQUE_NAME: Especifica um nome global único para todo o banco de dados. O nome padrão + ASM deve ser mudado, se é para executar várias instâncias.
+ASM_POWER_LIMIT: A potência máxima para as operações de re-laminagem em um exemplo ASM. 
+ASM_DISKGROUPS: lista de grupos de discos que devem ser montados no início de uma instância ASM ou o ALTER diskgroup MOUNT ALL. 
+ASM_DISKSTRING especifica um valor que pode ser usado para limitar os discos considerados na descoberta.
+
+
+lsdg
+
+
+Rem
+Rem    NOME
+Rem      asm.sql
+Rem
+Rem    DESCRIÇO
+Rem      Este script mostra informaçs os diskgroups e discos ASM usados pela instâia.
+Rem
+Rem    UTILIZAÇO
+Rem      @asm
+Rem
+Rem    ATUALIZAÇES  (MM/DD/YY)
+Rem     FERR@RI       01/04/09 - criaç do script
+Rem
+Rem ---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+
+set feedback off
+set pages 50
+set linesize 1000
+col STATE for a9
+col TYPE for a10
+col NAME for a30
+
+
+select NAME, TOTAL_MB, FREE_MB, STATE, TYPE, OFFLINE_DISKS from V$ASM_DISKGROUP
+order by 1;
+/
+
+PROMPT
+PROMPT --> Espaçlivre por DG considerando redundancia
+column %Free format 99.99
+compute sum of Total_MB on report
+compute sum of Free_MB on report
+break on report
+select
+name, type, state, decode(type,'NORMAL',2,'HIGH',3,'EXTERN',1) Redundancy,
+(total_mb/decode(type,'NORMAL',2,'HIGH',3,'EXTERN',1)) Total_MB,
+(free_mb/decode(type,'NORMAL',2,'HIGH',3,'EXTERN',1)) Free_MB,
+((free_mb/decode(type,'NORMAL',2,'HIGH',3,'EXTERN',1))/(total_mb/decode(type,'NORMAL',2,'HIGH',3,'EXTERN',1)))*100 "%Free"
+from v$asm_diskgroup;
+
+
+col NAME for a30
+col PATH for a45
+col HEADER_STATUS for a10
+col MOUNT_STATUS for a14
+col DISK_NUMBER for a3 format 999
+
+PROMPT
+PROMPT
+PROMPT --> Espaçlivre em cada disco de cada DG
+
+select NAME, GROUP_NUMBER, DISK_NUMBER, TOTAL_MB, FREE_MB, HEADER_STATUS, MOUNT_STATUS, STATE, PATH
+from V$ASM_DISK
+order by 2, 3
+/
+
+col DISK_NAME  for a23
+col LABEL      for a15
+col HEADER_STATUS for a13
+col "DISK_NR" for a3 FORMAT 999
+col TOTAL_MB for a9 FORMAT 999999999
+col FREE_MB for a9 FORMAT 999999999
+-- col PATH for a15
+col PATH for a38
+col MODE_STATUS for a11
+col diskgroup for a18
+
+PROMPT
+PROMPT
+PROMPT --> Relacao de DiskGroups x Disks
+
+select dg.name diskgroup,
+       dg.total_mb,
+       dg.free_mb,
+       d.DISK_NUMBER DISK_NR,
+       d.NAME disk_name,
+       d.HEADER_STATUS,
+       d.MODE_STATUS,
+       d.STATE,
+--       d.LABEL,
+       d.TOTAL_MB,
+       d.FREE_MB,
+       d.PATH
+from v$asm_disk d,
+     v$asm_diskgroup dg
+where d.GROUP_NUMBER = dg.GROUP_NUMBER
+order by dg.name, d.disk_number
+/
+
+PROMPT
+
+set feedback on
+set linesize 100
+
+
+
+
+** Espaço no diskgroup
+
+
+
+SET LINESIZE  145
+SET PAGESIZE  9999
+SET VERIFY    off
+COLUMN group_name             FORMAT a20           HEAD 'Disk Group|Name'
+COLUMN sector_size            FORMAT 99,999        HEAD 'Sector|Size'
+COLUMN block_size             FORMAT 99,999        HEAD 'Block|Size'
+COLUMN allocation_unit_size   FORMAT 999,999,999   HEAD 'Allocation|Unit Size'
+COLUMN state                  FORMAT a11           HEAD 'State'
+COLUMN type                   FORMAT a6            HEAD 'Type'
+COLUMN total_mb               FORMAT 999,999,999   HEAD 'Total Size (MB)'
+COLUMN used_mb                FORMAT 999,999,999   HEAD 'Used Size (MB)'
+COLUMN pct_used               FORMAT 999.99        HEAD 'Pct. Used'
+break on report on disk_group_name skip 1
+compute sum label "Grand Total: " of total_mb used_mb on report
+
+SELECT
+    name                                     group_name
+  , sector_size                              sector_size
+  , block_size                               block_size
+  , allocation_unit_size                     allocation_unit_size
+  , state                                    state
+  , type                                     type
+  , total_mb                                 total_mb
+  , (total_mb - free_mb)                     used_mb
+  , ROUND((1- (free_mb / total_mb))*100, 2)  pct_used
+FROM
+    gv$asm_diskgroup
+ORDER BY
+    name
+/
+
+
+select NAME, TYPE, TOTAL_MB, FREE_MB, BLOCK_SIZE, COMPATIBILITY from V$ASM_DISKGROUP;
+
+SELECT name, type, ceil (total_mb/1024) TOTAL_GB , ceil (free_mb/1024) FREE_GB, required_mirror_free_mb,
+ceil ((usable_file_mb)/1024) FROM gV$ASM_DISKGROUP;
+
+
+**** Espaço por datafile
+
+
+SET ECHO        OFF
+SET FEEDBACK    6
+SET HEADING     ON
+SET LINESIZE    180
+SET PAGESIZE    50000
+SET TERMOUT     ON
+SET TIMING      OFF
+SET TRIMOUT     ON
+SET TRIMSPOOL   ON
+SET VERIFY      OFF
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+
+COLUMN disk_group_name        FORMAT a25           HEAD 'Disk Group Name'
+COLUMN disk_file_path         FORMAT a20           HEAD 'Path'
+COLUMN disk_file_name         FORMAT a20           HEAD 'File Name'
+COLUMN disk_file_fail_group   FORMAT a20           HEAD 'Fail Group'
+COLUMN total_mb               FORMAT 999,999,999   HEAD 'File Size (MB)'
+COLUMN used_mb                FORMAT 999,999,999   HEAD 'Used Size (MB)'
+COLUMN pct_used               FORMAT 999.99        HEAD 'Pct. Used'
+
+BREAK ON report ON disk_group_name SKIP 1
+
+COMPUTE sum LABEL ""              OF total_mb used_mb ON disk_group_name
+COMPUTE sum LABEL "Grand Total: " OF total_mb used_mb ON report
+
+SELECT
+    NVL(a.name, '[CANDIDATE]')                       disk_group_name
+  , b.path                                           disk_file_path
+  , b.name                                           disk_file_name
+  , b.failgroup                                      disk_file_fail_group
+  , b.total_mb                                       total_mb
+  , (b.total_mb - b.free_mb)                         used_mb
+  , ROUND((1- (b.free_mb / b.total_mb))*100, 2)      pct_used
+FROM
+    gv$asm_diskgroup a RIGHT OUTER JOIN v$asm_disk b USING (group_number)
+ORDER BY
+    a.name
+/
+
+
+**** ASM FILE X volume information
+
+
+SELECT
+    CONCAT('+' || db_files.disk_group_name, SYS_CONNECT_BY_PATH(db_files.alias_name, '/')) full_path
+  , db_files.bytes
+  , db_files.space
+  , NVL(LPAD(db_files.type, 18), '<DIRECTORY>')  type
+  , db_files.creation_date
+  , db_files.disk_group_name
+  , LPAD(db_files.system_created, 4) system_created
+FROM
+    ( SELECT
+          g.name               disk_group_name
+        , a.parent_index       pindex
+        , a.name               alias_name
+        , a.reference_index    rindex
+        , a.system_created     system_created
+        , f.bytes              bytes
+        , f.space              space
+        , f.type               type
+        , TO_CHAR(f.creation_date, 'DD-MON-YYYY HH24:MI:SS')  creation_date
+      FROM
+          gv$asm_file f RIGHT OUTER JOIN gv$asm_alias     a USING (group_number, file_number)
+                                   JOIN gv$asm_diskgroup g USING (group_number)
+    ) db_files
+WHERE db_files.type IS NOT NULL
+START WITH (MOD(db_files.pindex, POWER(2, 24))) = 0
+    CONNECT BY PRIOR db_files.rindex = db_files.pindex
+UNION
+SELECT
+    '+' || volume_files.disk_group_name ||  ' [' || volume_files.volume_name || '] ' ||  volume_files.volume_device full_path
+  , volume_files.bytes
+  , volume_files.space
+  , NVL(LPAD(volume_files.type, 18), '<DIRECTORY>')  type
+  , volume_files.creation_date
+  , volume_files.disk_group_name
+  , null
+FROM
+    ( SELECT
+          g.name               disk_group_name
+        , v.volume_name        volume_name
+        , v.volume_device       volume_device
+        , f.bytes              bytes
+        , f.space              space
+        , f.type               type
+        , TO_CHAR(f.creation_date, 'DD-MON-YYYY HH24:MI:SS')  creation_date
+      FROM
+          gv$asm_file f RIGHT OUTER JOIN gv$asm_volume    v USING (group_number, file_number)
+                                   JOIN gv$asm_diskgroup g USING (group_number)
+    ) volume_files
+WHERE volume_files.type IS NOT NULL
+/
+
+
+-------------------
+** diskgroup x physical disc
+
+@C:\02_profissional\07_oracle_scr\Asm\asm_disk.sql
+
+select MOUNT_STATUS,HEADER_STATUS,MODE_STATUS,NAME,PATH,TOTAL_MB,FREE_MB from v$asm_disk;
+------------------------
+** Atividade ASM --> RBAL
+
+select GROUP_NUMBER, OPERATION, SOFAR, STATE FROM  V$ASM_OPERATION; 
+-----------------------
+** Read e Write por disk
+
+select NAME, GROUP_NUMBER, STATE,  REDUNDANCY, BYTES_READ, BYTES_WRITTEN from  V$ASM_DISK;
+---------------------------
+** Read e Write por group
+
+select INSTNAME, GROUP_NUMBER, BYTES_READ/1024 as  K_BYREAD, BYTES_WRITTEN/1024 as K_BYWRITTEN from V$ASM_DISK_IOSTAT;
+
+** Versão instancia do ASM
+select INSTANCE_NAME, STATUS, SOFTWARE_VERSION, GROUP_NUMBER,  COMPATIBLE_VERSION FROM V$ASM_CLIENT;
+
+
+-- ASM DISK
+
+SELECT SUBSTR(d.name,1,16) AS asmdisk, d.mount_status, d.state, 
+     dg.name AS diskgroup FROM V$ASM_DISKGROUP dg, V$ASM_DISK d 
+     WHERE dg.group_number = d.group_number;
+
+	 set linesize 150
+select MOUNT_STATUS,HEADER_STATUS,MODE_STATUS,NAME,PATH,TOTAL_MB,FREE_MB from v$asm_disk
+
+-- Disk ASM
+
+set linesize 150
+select NAME, GROUP_NUMBER, STATE,  REDUNDANCY, BYTES_READ, BYTES_WRITTEN from  V$ASM_DISK;
+
+-- Atividade do ASM.
+
+set linesize 150
+select GROUP_NUMBER, OPERATION, SOFAR, STATE FROM  V$ASM_OPERATION; 
+
+-- Attribute
+
+SELECT dg.name AS diskgroup, SUBSTR(a.name,1,18) AS name,
+     SUBSTR(a.value,1,24) AS value, read_only FROM V$ASM_DISKGROUP dg, 
+     V$ASM_ATTRIBUTE a WHERE dg.name = 'DATA'
+     AND dg.group_number = a.group_number;
+	 
+-- Client Instance	 
+
+col INSTANCE_NAME      for a20
+col SOFTWARE_VERSION   for a15
+col COMPATIBLE_VERSION for a15
+select INSTANCE_NAME, STATUS, SOFTWARE_VERSION, GROUP_NUMBER,  COMPATIBLE_VERSION FROM V$ASM_CLIENT;
+
+-- Instance I/O ASM
+
+set linesize 150
+
+COL INSTNAME for a20
+
+select INSTNAME, GROUP_NUMBER, BYTES_READ/1024 as  K_BYREAD, BYTES_WRITTEN/1024 as K_BYWRITTEN from V$ASM_DISK_IOSTAT;
+
+-- DiskGroups
+
+select name, total_mb from v$asm_diskgroup_stat;
+
+set linesize 150
+COL NAME FOR A20
+select NAME, TYPE, TOTAL_MB, FREE_MB, BLOCK_SIZE, COMPATIBILITY from V$ASM_DISKGROUP;
+
+-- Diskgroup Exp
+
+set linesize 150
+col name for a20
+SELECT name, type, total_mb, free_mb, required_mirror_free_mb,
+usable_file_mb FROM V$ASM_DISKGROUP;
+
+
+
+

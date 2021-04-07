@@ -1,0 +1,103 @@
+************************************************
+*     LOGS                                     *
+************************************************
+
+
+$ORA_CRS_HOME//log: 
+
+This location contains log file and diagnostic messages for Oracle Clusterware.
+
+In addition, we have the following supplemental CRS log locations:
+
+- $ORA_CRS_HOME/crs/log:   Contains trace files for the CRS resources.
+
+- $ORA_CRS_HOME/crs/init:   Contains trace files of the CRS daemon during startup. 
+
+- $ORA_CRS_HOME/crs/trace
+
+- $ORA_CRS_HOME/css/log:   The Cluster Synchronization (CSS) logs indicate all actions such as reconfigurations,
+                           missed check-ins, connects, and disconnects from the client CSS listener.
+
+- $ORA_CRS_HOME/css/init:   Contains core dumps from the Oracle Cluster Synchronization Service daemon (OCSSd) and the process ID (PID) 
+                            for any CSS daemon process.
+
+- $ORA_CRS_HOME/evm/log: Contains log files for the Event Volume Manager (EVM) and evmlogger daemons. 
+
+- $ORA_CRS_HOME/evm/init:  Contains PID and lock files for EVM and core dump files for EVM.
+
+- $ORA_CRS_HOME/srvm/log:  Contains log files for Oracle Cluster Registry (OCR), which contains the details at the Oracle cluster level.
+
+
+
+
+12C:
+
+In my last post, I had presumed there is a bug since I discovered an empty clusterware alert log in its conventional location i.e.  
+$ORACLE_HOME/log/<hostname>in 12.1.0.2 standard cluster.
+
+[grid@host01 ~]$ crsctl query crs activeversion;
+Oracle Clusterware active version on the cluster is [12.1.0.2.0]
+
+[root@host01 host01]# ls -l /u01/app/12.1.0/grid/log/host01/alerthost01.log
+
+-rw-rw-r– 1 grid oinstall 0 Jun 15 14:10 /u01/app/12.1.0/grid/log/host01/alerthost01.log
+But as commented by Ricardo Portillo Proni,  in oracle clusterware 12c, 
+ the location of alert log has been changed to $ORACLE_BASE/diag/crs/<hostname>/crs/trace/
+
+Hence, I could successfully  the alert log on node host01 in directory  $ORACLE_BASE/diag/crs/host01/crs/trace/
+
+[grid@host01 trace]$ ls -l $ORACLE_BASE/diag/crs/host01/crs/trace/alert*
+
+-rw-rw—- 1 root oinstall 812316 Aug 11 10:22 /u01/app/grid/diag/crs/host01/crs/trace/alert.log
+Another noticeable thing is that name of clusterware alert log has been changed to alert.log as compared to alert<hostname>.log in 11g.
+
+I would like to mention that I have verified the above only in 12.1.0.2 standard cluster.
+
+In 12.1.0.1 flex cluster though, the location and name of  alert log location is same as in 11g i.e. $ORACLE_HOME/log/host01
+
+[root@host01 host01]# crsctl query crs activeversion
+Oracle Clusterware active version on the cluster is [12.1.0.1.0]
+
+[root@host01 host01]# ls -l $ORACLE_HOME/log/host01/alert*
+-rw-rw-r-- 1 grid oinstall 497364 Aug 11 11:00 /u01/app/12.1.0/grid/log/host01/alerthost01.log
+Conclusion:
+12.1.0.2 standard cluster
+
+Name of alert log : alert.log
+location of alert log: $ORACLE_BASE/diag/crs/host01/crs/trace
+12.1.0.1 flex cluster
+
+Name of alert log : alert<hostname>.log
+location of alert log: $ORACLE_HOME/log/host01
+Hope it helps!
+
+Pls refer to comments for further information.
+
+11G:
+
+Clusterware:
+/u01/app/12.2.0/grid/log/srv1/alertsrv1.log
+
+
+OCRDUMP, OCRCHECK, OCRCONFIG, CRSCTL:
+ /u01/app/12.2.0/grid/log/srv1/client/
+
+ 
+Cluster Time Synchronization Service:
+/u01/app/12.2.0/grid/log/srv1/ctssd/
+
+
+Grid Interprocess commnucation Daemon:
+/u01/app/12.2.0/grid/log/srv1/gipcd/ 
+
+Cluster Ready Service Daemon:
+/u01/app/12.2.0/grid/log/srv1/ohasd
+
+
+Cluster Plug and Play Daemon:
+/u01/app/12.2.0/grid/log/srv1/gpnpd/
+
+Event Manger Daemon:
+/u01/app/12.2.0/grid/log/srv1/evmd/
+
+12C:

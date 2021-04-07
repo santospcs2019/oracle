@@ -1,0 +1,141 @@
+**************************************
+* Create Diskgroup                   *
+**************************************
+
+CREATE DISKGROUP TEST EXTERNAL REDUNDANCY
+DISK '/dev/oracleasm/disks/DG_TEST',
+'/dev/oracleasm/disks/DG_TEST1',
+'/dev/oracleasm/disks/DG_TEST2' ATTRIBUTE 'au_size'='4M',
+'compatible.asm' = '11.2.0.2.0',
+'compatible.rdbms' = '11.2.0.2.0',
+'compatible.advm' = '11.2.0.2.0';
+
+-- Dismout DISKGROUP
+
+ALTER DISKGROUP ASMODH1 DISMOUNT;
+
+-- Mount DISKGROUP
+
+ALTER DISKGROUP ASMODH1 MOUNT;
+
+Administering ASM Disk Groups
+There are a few basic points to consider when planning to use ASM: 
+.In most cases you will only need two disk groups (DATA and FRA), where DATA holds all database related files and FRA holds the fast recovery area, including multiplexed copies on online redo logs and controlfiles. Typically, the FRA disk group will be twice the size of the DATA disk group, since it must hold all backups.
+.Oracle recommend a minimum of 4 LUNs per disk group, with LUNs using hardware RAID and external redundancy if possible.
+.All LUNs within a disk group should be the same size and have the same performance characteristics.
+.LUNs should be made up from disks dedicated to Oracle, not shared with other applications.
+Now let's look at basic administration of disk groups.
+
+Disks
+Disk groups are created using the CREATE DISKGROUP statement. This statement allows you to specify the level of redundancy:
+
+.NORMAL REDUNDANCY - Two-way mirroring, requiring two failure groups.
+.HIGH REDUNDANCY - Three-way mirroring, requiring three failure groups.
+.EXTERNAL REDUNDANCY - No mirroring for disks that are already protected using hardware mirroring or RAID. If you have hardware RAID it should be used in preference to ASM redundancy, so this will be the standard option for most installations.
+In addition failure groups and preferred names for disks can be defined. If the NAME clause is omitted the disks are given a system generated name like "disk_group_1_0001". The FORCE option can be used to move a disk from another disk group into this one.
+
+CREATE DISKGROUP disk_group_1 NORMAL REDUNDANCY
+  FAILGROUP failure_group_1 DISK
+    '/devices/diska1' NAME diska1,
+    '/devices/diska2' NAME diska2
+  FAILGROUP failure_group_2 DISK
+    '/devices/diskb1' NAME diskb1,
+    '/devices/diskb2' NAME diskb2;Disk groups can be deleted using the DROP DISKGROUP statement.
+
+DROP DISKGROUP disk_group_1 INCLUDING CONTENTS;Disks can be added or removed from disk groups using the ALTER DISKGROUP statement. Remember that the wildcard "*" can be used to reference disks so long as the resulting string does not match a disk already used by an existing disk group.
+
+-- Add disks.
+ALTER DISKGROUP disk_group_1 ADD DISK
+  '/devices/disk*3',
+  '/devices/disk*4';
+
+-- Drop a disk.
+ALTER DISKGROUP disk_group_1 DROP DISK diska2;Disks can be resized using the RESIZE clause of the ALTER DISKGROUP statement. The statement can be used to resize individual disks, all disks in a failure group or all disks in the disk group. If the SIZE clause is omitted the disks are resized to the size of the disk returned by the OS.
+
+-- Resize a specific disk.
+ALTER DISKGROUP disk_group_1
+  RESIZE DISK diska1 SIZE 100G;
+
+-- Resize all disks in a failure group.
+ALTER DISKGROUP disk_group_1
+  RESIZE DISKS IN FAILGROUP failure_group_1 SIZE 100G;
+
+-- Resize all disks in a disk group.
+ALTER DISKGROUP disk_group_1
+  RESIZE ALL SIZE 100G;The UNDROP DISKS clause of the ALTER DISKGROUP statement allows pending disk drops to be undone. It will not revert drops that have completed, or disk drops associated with the dropping of a disk group.
+
+ALTER DISKGROUP disk_group_1 UNDROP DISKS;Disk groups can be rebalanced manually using the REBALANCE clause of the ALTER DISKGROUP statement. If the POWER clause is omitted the ASM_POWER_LIMIT parameter value is used. Rebalancing is only needed when the speed of the automatic rebalancing is not appropriate.
+
+ALTER DISKGROUP disk_group_1 REBALANCE POWER 5;Disk groups are mounted at ASM instance startup and unmounted at ASM instance shutdown. Manual mounting and dismounting can be accomplished using the ALTER DISKGROUP statement as seen below.
+
+ALTER DISKGROUP ALL DISMOUNT;
+ALTER DISKGROUP ALL MOUNT;
+ALTER DISKGROUP disk_group_1 DISMOUNT;
+ALTER DISKGROUP disk_group_1 MOUNT;Templates
+Templates are named groups of attributes that can be applied to the files within a disk group. The following example show how templates can be created, altered and dropped.
+
+-- Create a new template.
+ALTER DISKGROUP disk_group_1 ADD TEMPLATE my_template ATTRIBUTES (MIRROR FINE);
+
+-- Modify template.
+ALTER DISKGROUP disk_group_1 ALTER TEMPLATE my_template ATTRIBUTES (COARSE);
+
+-- Drop template.
+ALTER DISKGROUP disk_group_1 DROP TEMPLATE my_template;Available attributes include:
+
+.UNPROTECTED - No mirroring or striping regardless of the redundancy setting.
+.MIRROR - Two-way mirroring for normal redundancy and three-way mirroring for high redundancy. This attribute cannot be set for external redundancy.
+.COARSE - Specifies lower granuality for striping. This attribute cannot be set for external redundancy.
+.FINE - Specifies higher granularity for striping. This attribute cannot be set for external redundancy.
+Directories
+A directory heirarchy can be defined using the ALTER DISKGROUP statement to support ASM file aliasing. The following examples show how ASM directories can be created, modified and deleted.
+
+-- Create a directory.
+ALTER DISKGROUP disk_group_1 ADD DIRECTORY '+disk_group_1/my_dir';
+
+-- Rename a directory.
+ALTER DISKGROUP disk_group_1 RENAME DIRECTORY '+disk_group_1/my_dir' TO '+disk_group_1/my_dir_2';
+
+-- Delete a directory and all its contents.
+ALTER DISKGROUP disk_group_1 DROP DIRECTORY '+disk_group_1/my_dir_2' FORCE;Aliases
+Aliases allow you to reference ASM files using user-friendly names, rather than the fully qualified ASM filenames.
+
+-- Create an alias using the fully qualified filename.
+ALTER DISKGROUP disk_group_1 ADD ALIAS '+disk_group_1/my_dir/my_file.dbf'
+  FOR '+disk_group_1/mydb/datafile/my_ts.342.3';
+
+-- Create an alias using the numeric form filename.
+ALTER DISKGROUP disk_group_1 ADD ALIAS '+disk_group_1/my_dir/my_file.dbf'
+  FOR '+disk_group_1.342.3';
+
+-- Rename an alias.
+ALTER DISKGROUP disk_group_1 RENAME ALIAS '+disk_group_1/my_dir/my_file.dbf'
+  TO '+disk_group_1/my_dir/my_file2.dbf';
+
+-- Delete an alias.
+ALTER DISKGROUP disk_group_1 DELETE ALIAS '+disk_group_1/my_dir/my_file.dbf';Attempting to drop a system alias results in an error.
+
+Files
+Files are not deleted automatically if they are created using aliases, as they are not Oracle Managed Files (OMF), or if a recovery is done to a point-in-time before the file was created. For these circumstances it is necessary to manually delete the files, as shown below.
+
+-- Drop file using an alias.
+ALTER DISKGROUP disk_group_1 DROP FILE '+disk_group_1/my_dir/my_file.dbf';
+
+-- Drop file using a numeric form filename.
+ALTER DISKGROUP disk_group_1 DROP FILE '+disk_group_1.342.3';
+
+-- Drop file using a fully qualified filename.
+ALTER DISKGROUP disk_group_1 DROP FILE '+disk_group_1/mydb/datafile/my_ts.342.3';Checking Metadata
+The internal consistency of disk group metadata can be checked in a number of ways using the CHECK clause of the ALTER DISKGROUP statement.
+
+-- Check metadata for a specific file.
+ALTER DISKGROUP disk_group_1 CHECK FILE '+disk_group_1/my_dir/my_file.dbf'
+
+-- Check metadata for a specific failure group in the disk group.
+ALTER DISKGROUP disk_group_1 CHECK FAILGROUP failure_group_1;
+
+-- Check metadata for a specific disk in the disk group.
+ALTER DISKGROUP disk_group_1 CHECK DISK diska1;
+
+-- Check metadata for all disks in the disk group.
+ALTER DISKGROUP disk_group_1 CHECK ALL;
