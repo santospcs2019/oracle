@@ -1,0 +1,83 @@
+****************************
+* Export                   *
+****************************
+time /t
+exp system@aloc parfile=aam.par 
+time /t
+
+-- Arquivo de parametros aam.par
+
+owner=aam
+file=expaam.dmp
+log=expaam.log
+consistent=Y
+direct=Y
+
+-------------------------------------------------
+
+time /t
+exp aam@aloc parfile=aam_smart88599.par 
+time /t
+
+-- arquivo de parametros aam_smart88599.par
+tables=(MPA_HIST_COD_LOJA, MPA_LOJA_EXCECAO)
+file=expaam_smart88599.dmp
+log=expaam_smart88599.log
+consistent=Y
+direct=Y
+------------------------------------------------
+
+export PATH=$PATH:/usr/local/bin:/usr/bin:/usr/X11R6/bin:/bin:/usr/games:/opt/gnome/bin:/opt/kde3/bin:/oracle/product/9ir2/bin
+export ORACLE_BASE=/oracle
+export ORACLE_SID=tes
+export TNS_ADMI=N/oracle/product/9ir2/network/admin
+export ORACLE_HOME=/oracle/product/9ir2
+env
+echo 'Inicio export'
+exp admpweb@xxxx parfile=/oracle/admin/scripts/expadmpweb.par
+echo 'Fim Export'
+
+-- parfile
+
+owner=admpweb
+file=expadmpweb.dmp
+log=expadmpweb.log
+consistent=Y
+direct=Y
+-----------------------------------------------------
+
+date /t
+exp usersyn@SYPD parfile=expusersyn.par
+date /t
+pause
+
+tables=(syn_versao_objeto, syn_script_aplicado)
+file=expuseryn.dmp
+log=expuseryn.log
+consistent=Y
+direct=Y
+
+-------------------------------------------------
+
+******************************
+* Import                     *
+******************************
+
+-- commit_y_nao_esqueca_import_seg_rbs
+
+imp system@ceaaloc92 parfile=imp_88599.par
+Pause
+
+-- arquivo de parametros imp_88599.par
+FROMUSER=AAM
+TOUSER=AAM
+tables=(MPA_HIST_COD_LOJA, MPA_LOJA_EXCECAO)
+FILE=expaam_smart88599.dmp
+log=impaam_smart88599.log
+IGNORE=Y
+
+
+------------------------------
+
+
+imp system@dmcp file=expprealoc.dmp log=impprealoc.log fromuser=PREALOC TOUSER=PALOCFULL

@@ -1,0 +1,9 @@
+
+
+https://192.168.56.71:5500/em
+
+Note: If you want to retrieve the port number that the EM Express is configured, use the following query:
+-- for https:
+select DBMS_XDB_CONFIG.GETHTTPSPORT() from dual;
+-- for http:
+select DBMS_XDB_CONFIG.GETHTTPPORT() from dual;
